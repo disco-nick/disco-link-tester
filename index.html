@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>DISCO Link Tester</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #fff; --text: #111; --muted: #666; --line: #e3e3e0;
+    --link: #0a58ca; --accent: #ffe14d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111; --card: #1c1c1c; --text: #eee; --muted: #999; --line: #333; --link: #7ab3ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 28px 0 8px; }
+  p.note { color: var(--muted); font-size: 14px; margin: 4px 0 16px; }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  summary { font-weight: 600; cursor: pointer; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+  label { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); gap: 4px; }
+  input { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); width: 100%; }
+  .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); cursor: pointer; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  li a { color: var(--link); font-weight: 600; text-decoration: none; display: block; }
+  li .expect { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  li code { display: block; font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 6px; }
+  .custom { display: flex; gap: 8px; }
+  .custom a { white-space: nowrap; align-self: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DISCO link tester</h1>
+  <p class="note">Tap a link on your phone with the DISCO app installed. Links must be opened from this page, not typed into the address bar, or iOS won't hand them to the app.</p>
+
+  <details id="config">
+    <summary>Settings (hosts and IDs)</summary>
+    <div class="grid" id="fields"></div>
+    <div class="row">
+      <button type="button" id="share">Copy link to this setup</button>
+      <button type="button" id="reset">Reset to defaults</button>
+    </div>
+  </details>
+
+  <div id="sections"></div>
+
+  <h2>Custom URL</h2>
+  <div class="custom">
+    <input id="customUrl" placeholder="https://au2.disco-staging-2.com/explorer/playlists/123">
+    <a id="customLink" href="#">Open</a>
+  </div>
+</main>
+
+<script>
+const DEFAULTS = {
+  domain: 'disco-staging-2.com',
+  home: 'au2',
+  member: 'noor',
+  outsider: 'fcv',
+  playlist: '31499',
+  inbox: '7991',
+  inboxPlaylist: '31500',
+  track: '658351',
+  noteFirst: '16522',
+  noteLast: '16521',
+  badNote: '56234',
+  memberPlaylist: '31098',
+};
+
+const LABELS = {
+  domain: 'Domain (e.g. disco.ac)',
+  home: 'Your business subdomain',
+  member: 'Another business you belong to',
+  outsider: 'A business you do NOT belong to',
+  playlist: 'Playlist ID',
+  inbox: 'Inbox ID',
+  inboxPlaylist: 'Inbox playlist ID',
+  track: 'Track ID',
+  noteFirst: 'Note ID (first in list)',
+  noteLast: 'Note ID (last in list)',
+  badNote: 'Note ID that does not exist',
+  memberPlaylist: 'Playlist ID on the other business',
+};
+
+function loadConfig() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('disco-link-tester') || '{}'); } catch (e) {}
+  const cfg = { ...DEFAULTS, ...saved };
+  for (const key of Object.keys(DEFAULTS)) if (params.has(key)) cfg[key] = params.get(key);
+  return cfg;
+}
+
+let cfg = loadConfig();
+
+function save() {
+  try { localStorage.setItem('disco-link-tester', JSON.stringify(cfg)); } catch (e) {}
+}
+
+function host(sub) { return `https://${sub}.${cfg.domain}`; }
+
+function sections() {
+  const h = host(cfg.home), m = host(cfg.member), o = host(cfg.outsider);
+  const notes = (base, id) => `${base}/explorer/tracks/${cfg.track}/edit-metadata?tab=notes&note=${id}`;
+  return [
+    ['Your business', [
+      ['Playlist', `${h}/explorer/playlists/${cfg.playlist}`, 'Opens the playlist in the Home tab'],
+      ['Inbox playlist', `${h}/inboxes/${cfg.inbox}/playlists/${cfg.inboxPlaylist}`, 'Opens in the Inboxes tab with Import'],
+      ['Track', `${h}/explorer/tracks/${cfg.track}`, 'Opens track info'],
+      ['Note (first in list)', notes(h, cfg.noteFirst), 'Opens Notes, scrolled to and highlighting the note'],
+      ['Note (last in list)', notes(h, cfg.noteLast), 'Opens Notes, scrolled to and highlighting the note'],
+      ['Note that does not exist', notes(h, cfg.badNote), 'Opens Notes with a "couldn’t open that note" toast'],
+      ['Edit metadata (not notes)', `${h}/explorer/tracks/${cfg.track}/edit-metadata`, 'iOS: opens the website. Android: opens the app on Home'],
+    ]],
+    ['A business you belong to', [
+      ['Playlist', `${m}/explorer/playlists/${cfg.memberPlaylist}`, 'Alert with Switch account; switching loads the playlist'],
+    ]],
+    ['A business you do not belong to', [
+      ['Playlist', `${o}/explorer/playlists/${cfg.playlist}`, 'Alert with Cancel only; Cancel goes back'],
+      ['Track', `${o}/explorer/tracks/${cfg.track}`, 'Alert with Cancel only; Cancel goes back'],
+      ['Note', notes(o, cfg.noteFirst), 'Alert with Cancel only; Cancel closes Notes'],
+    ]],
+  ];
+}
+
+function renderFields() {
+  const wrap = document.getElementById('fields');
+  wrap.innerHTML = '';
+  for (const key of Object.keys(DEFAULTS)) {
+    const label = document.createElement('label');
+    label.textContent = LABELS[key];
+    const input = document.createElement('input');
+    input.value = cfg[key];
+    input.autocapitalize = 'off';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.addEventListener('input', () => { cfg[key] = input.value.trim(); save(); renderLinks(); });
+    label.appendChild(input);
+    wrap.appendChild(label);
+  }
+}
+
+function renderLinks() {
+  const root = document.getElementById('sections');
+  root.innerHTML = '';
+  for (const [title, links] of sections()) {
+    const h2 = document.createElement('h2');
+    h2.textContent = title;
+    const ul = document.createElement('ul');
+    for (const [name, url, expect] of links) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = url;
+      a.textContent = name;
+      const p = document.createElement('div');
+      p.className = 'expect';
+      p.textContent = expect;
+      const code = document.createElement('code');
+      code.textContent = url;
+      li.append(a, p, code);
+      ul.appendChild(li);
+    }
+    root.append(h2, ul);
+  }
+}
+
+document.getElementById('share').addEventListener('click', async () => {
+  const params = new URLSearchParams();
+  for (const key of Object.keys(DEFAULTS)) params.set(key, cfg[key]);
+  const url = `${location.href.split('#')[0]}#${params}`;
+  try { await navigator.clipboard.writeText(url); alert('Copied'); } catch (e) { prompt('Copy this link', url); }
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  cfg = { ...DEFAULTS };
+  save();
+  history.replaceState(null, '', location.pathname);
+  renderFields();
+  renderLinks();
+});
+
+const customUrl = document.getElementById('customUrl');
+const customLink = document.getElementById('customLink');
+customUrl.addEventListener('input', () => { customLink.href = customUrl.value.trim() || '#'; });
+
+renderFields();
+renderLinks();
+</script>
+</body>
+</html>
